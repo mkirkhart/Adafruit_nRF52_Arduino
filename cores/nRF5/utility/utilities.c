@@ -42,6 +42,8 @@
 #include "nrf_sdm.h"
 #include "nrf52/nrf_mbr.h"
 
+// Read firmware id with
+// nrfjprog --memrd 0x300C
 static lookup_entry_t const sd_lookup_items[] =
 {
     { .key = 0x0088, .data = "S132 2.0.1" },
