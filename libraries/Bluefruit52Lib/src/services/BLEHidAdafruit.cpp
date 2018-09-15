@@ -197,6 +197,7 @@ BLEHidAdafruit::BLEHidAdafruit(void)
   : BLEHidGeneric(3, 1, 0)
 {
   _mse_buttons = 0;
+  _kbd_led_cb = NULL;
 }
 
 err_t BLEHidAdafruit::begin(void)
@@ -205,12 +206,13 @@ err_t BLEHidAdafruit::begin(void)
   uint16_t output_len[] = { 1 };
 
   setReportLen(input_len, output_len, NULL);
-  enableBootProtocol(true, true);
+  enableKeyboard(true);
+  enableMouse(true);
   setReportMap(hid_report_descriptor, sizeof(hid_report_descriptor));
 
   VERIFY_STATUS( BLEHidGeneric::begin() );
 
-  // Attemp to change the connection interval to 11.25-15 ms when starting HID
+  // Attempt to change the connection interval to 11.25-15 ms when starting HID
   Bluefruit.setConnInterval(9, 12);
 
   return ERROR_NONE;
@@ -219,9 +221,36 @@ err_t BLEHidAdafruit::begin(void)
 /*------------------------------------------------------------------*/
 /* Keyboard
  *------------------------------------------------------------------*/
+
+void blehid_ada_keyboard_output_cb(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t offset)
+{
+  LOG_LV2("HID", "Keyboard LED : 0x%02X", data[0]);
+  VERIFY(len == 1, );
+
+  BLEHidAdafruit& svc = (BLEHidAdafruit&) chr.parentService();
+  if ( svc._kbd_led_cb ) svc._kbd_led_cb(data[0]);
+}
+
+void BLEHidAdafruit::setKeyboardLedCallback(kbd_led_cb_t fp)
+{
+  _kbd_led_cb = fp;
+
+  // Report mode
+  this->setOutputReportCallback(REPORT_ID_KEYBOARD, fp ? blehid_ada_keyboard_output_cb : NULL);
+
+  // Boot mode
+  _chr_boot_keyboard_output->setWriteCallback(fp ? blehid_ada_keyboard_output_cb : NULL);
+}
+
 bool BLEHidAdafruit::keyboardReport(hid_keyboard_report_t* report)
 {
-  return inputReport( REPORT_ID_KEYBOARD, report, sizeof(hid_keyboard_report_t));
+  if ( isBootMode() )
+  {
+    return bootKeyboardReport(report, sizeof(hid_keyboard_report_t));
+  }else
+  {
+    return inputReport( REPORT_ID_KEYBOARD, report, sizeof(hid_keyboard_report_t));
+  }
 }
 
 bool BLEHidAdafruit::keyboardReport(uint8_t modifier, uint8_t keycode[6])
@@ -313,7 +342,13 @@ bool BLEHidAdafruit::consumerKeyRelease(void)
  *------------------------------------------------------------------*/
 bool BLEHidAdafruit::mouseReport(hid_mouse_report_t* report)
 {
-  return inputReport( REPORT_ID_MOUSE, report, sizeof(hid_mouse_report_t));
+  if ( isBootMode() )
+  {
+    return bootMouseReport(report, sizeof(hid_mouse_report_t));
+  }else
+  {
+    return inputReport( REPORT_ID_MOUSE, report, sizeof(hid_mouse_report_t));
+  }
 }
 
 bool BLEHidAdafruit::mouseReport(uint8_t buttons, int8_t x, int8_t y, int8_t wheel, int8_t pan)

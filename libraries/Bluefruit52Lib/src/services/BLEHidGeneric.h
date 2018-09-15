@@ -41,11 +41,23 @@
 #include "BLECharacteristic.h"
 #include "BLEService.h"
 
+enum
+{
+  HID_PROTOCOL_MODE_BOOT   = 0,
+  HID_PROTOCOL_MODE_REPORT = 1
+};
+
 typedef struct{
   uint8_t shift;
   uint8_t keycode;
 }hid_ascii_to_keycode_entry_t;
 extern const hid_ascii_to_keycode_entry_t HID_ASCII_TO_KEYCODE[128];
+
+typedef struct{
+  uint8_t ascii;
+  uint8_t shifted;
+}hid_keycode_to_ascii_t;
+extern hid_keycode_to_ascii_t const HID_KEYCODE_TO_ASCII[128];
 
 /// Standard HID Boot Protocol Mouse Report.
 typedef ATTR_PACKED_STRUCT(struct)
@@ -87,29 +99,35 @@ typedef ATTR_PACKED_STRUCT(struct)
 class BLEHidGeneric : public BLEService
 {
   public:
-    typedef void (*output_report_cb_t) (uint8_t reportID, uint8_t* data, uint16_t len);
-
     BLEHidGeneric(uint8_t num_input, uint8_t num_output = 0, uint8_t num_feature = 0);
 
-    void enableBootProtocol(bool bootKeyboard, bool bootMouse);
+    void enableKeyboard(bool enable);
+    void enableMouse(bool enable);
+
     void setHidInfo(uint16_t bcd, uint8_t country, uint8_t flags);
 
     void setReportLen(uint16_t input_len[], uint16_t output_len[] = NULL, uint16_t feature_len[] = NULL);
     void setReportMap(const uint8_t* report_map, size_t len);
 
-    void setOutputReportCallback(uint8_t reportID, output_report_cb_t fp);
+    void setOutputReportCallback(uint8_t reportID, BLECharacteristic::write_cb_t fp);
 
     virtual err_t begin(void);
 
+    bool isBootMode(void) { return _protocol_mode == HID_PROTOCOL_MODE_BOOT; }
+
+    // Report
     bool inputReport(uint8_t reportID, void const* data, int len);
+    bool bootKeyboardReport(void const* data, int len);
+    bool bootMouseReport(void const* data, int len);
 
   protected:
     uint8_t _num_input;
     uint8_t _num_output;
     uint8_t _num_feature;
 
-    bool _boot_keyboard;
-    bool _boot_mouse;
+    bool    _has_keyboard;
+    bool    _has_mouse;
+    bool    _protocol_mode;
 
     uint8_t _hid_info[4];
     const uint8_t* _report_map;
@@ -118,8 +136,6 @@ class BLEHidGeneric : public BLEService
     uint16_t* _input_len;
     uint16_t* _output_len;
     uint16_t* _feature_len;
-
-    output_report_cb_t* _output_cbs;
 
     BLECharacteristic* _chr_protocol;
 
@@ -133,9 +149,7 @@ class BLEHidGeneric : public BLEService
 
     BLECharacteristic _chr_control;
 
-    COMMENT_OUT (
-        friend void blehidgeneric_output_cb(BLECharacteristic& chr, ble_gatts_evt_write_t* request);
-    )
+    friend void blehid_generic_protocol_mode_cb(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t offset);
 };
 
 //--------------------------------------------------------------------+

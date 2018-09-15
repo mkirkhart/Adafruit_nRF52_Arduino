@@ -394,14 +394,6 @@ void BLECharacteristic::_eventHandler(ble_evt_t* event)
           memcpy(&value, request->data, 2);
           _cccd_wr_cb(*this, value);
         }
-
-        // TODO could move later
-        // Save CCCD if bonded to file whenever changed
-        extern void _adafruit_save_bond_cccd_dfr(uint32_t conn_handle);
-        if ( Bluefruit.connPaired() )
-        {
-          ada_callback(NULL, _adafruit_save_bond_cccd_dfr, event->evt.common_evt.conn_handle);
-        }
       }
     }
     break;
@@ -619,7 +611,9 @@ bool BLECharacteristic::indicate(const void* data, uint16_t len)
 
   if ( indicateEnabled() )
   {
-    uint16_t const max_payload = Bluefruit.Gap.getMTU( Bluefruit.connHandle() ) - 3;
+    uint16_t conn_hdl = Bluefruit.connHandle();
+
+    uint16_t const max_payload = Bluefruit.Gap.getMTU( conn_hdl ) - 3;
     const uint8_t* u8data = (const uint8_t*) data;
 
     while ( remaining )
@@ -636,16 +630,10 @@ bool BLECharacteristic::indicate(const void* data, uint16_t len)
       };
 
       LOG_LV2("CHR", "Indicate %d bytes", packet_len);
-      err_t err;
 
-      // If previous indicate is still in progress, wait for a while and try again
-      while ( NRF_ERROR_BUSY == (err = sd_ble_gatts_hvx(Bluefruit.connHandle(), &hvx_params)) )
-      {
-        // TODO should wait for BLE_GATTS_EVT_HVC event
-        delay( Bluefruit.connInterval() );
-      }
-
-      VERIFY_STATUS( err, false );
+      // Blocking wait until receiving confirmation from peer
+      VERIFY_STATUS( sd_ble_gatts_hvx( conn_hdl, &hvx_params), false );
+      VERIFY ( Bluefruit.Gatt.waitForIndicateConfirm(conn_hdl) );
 
       remaining -= packet_len;
       u8data    += packet_len;
