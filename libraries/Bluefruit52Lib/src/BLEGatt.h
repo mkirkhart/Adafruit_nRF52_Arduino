@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEGatt.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@ class BLEGatt
     BLEGatt(void);
 
     uint16_t readCharByUuid(uint16_t conn_hdl, BLEUuid bleuuid, void* buffer, uint16_t bufsize, uint16_t start_hdl = 1, uint16_t end_hdl = 0xffff);
-//    bool     waitForIndicateConfirm(uint16_t conn_hdl);
 
     /*------------------------------------------------------------------*/
     /* INTERNAL USAGE ONLY

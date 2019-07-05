@@ -9,6 +9,9 @@
  * TX is digital pin A1 (connect to RX of other device)
  
  This example code is in the public domain.
+ 
+ Software Serial will not work when Bluetooth Radio is active because the softdevice
+ interrupts the library.
 
  */
 
@@ -21,6 +24,8 @@ void setup()
 {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
   Serial.println("Goodnight moon!");
  
   // set the data rate for the SoftwareSerial port

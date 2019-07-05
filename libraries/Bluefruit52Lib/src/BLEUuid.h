@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEUuid.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2016, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -81,8 +81,10 @@ class BLEUuid
 #define UUID16_SVC_BLOOD_PRESSURE                             0x1810
 #define UUID16_SVC_CURRENT_TIME                               0x1805
 #define UUID16_SVC_CYCLING_SPEED_AND_CADENCE                  0x1816
+#define UUID16_SVC_CYCLING_POWER                              0x1818
 #define UUID16_SVC_LOCATION_AND_NAVIGATION                    0x1819
 #define UUID16_SVC_DEVICE_INFORMATION                         0x180A
+#define UUID16_SVC_ENVIRONMENTAL_SENSING                      0x181A
 #define UUID16_SVC_GLUCOSE                                    0x1808
 #define UUID16_SVC_HEALTH_THERMOMETER                         0x1809
 #define UUID16_SVC_HEART_RATE                                 0x180D
@@ -121,6 +123,8 @@ class BLEUuid
 #define UUID16_CHR_BOOT_KEYBOARD_OUTPUT_REPORT                0x2A32
 #define UUID16_CHR_BOOT_MOUSE_INPUT_REPORT                    0x2A33
 #define UUID16_CHR_CURRENT_TIME                               0x2A2B
+#define UUID16_CHR_CYCLING_POWER_MEASUREMENT                  0x2A63
+#define UUID16_CHR_CYCLING_POWER_FEATURE                      0x2A65
 #define UUID16_CHR_DATE_TIME                                  0x2A08
 #define UUID16_CHR_DAY_DATE_TIME                              0x2A0A
 #define UUID16_CHR_DAY_OF_WEEK                                0x2A09
@@ -192,6 +196,7 @@ class BLEUuid
 #define UUID16_PLX_SPOT_CHECK_MEAS                            0x2A5E
 #define UUID16_PLX_CONTINUOUS_MEAS                            0x2A5F
 #define UUID16_PLX_FEATURES                                   0x2A60
+#define UUID16_CHR_UV_INDEX                                   0x2A76
 
 /*------------------------------------------------------------------*/
 /* Company UUID

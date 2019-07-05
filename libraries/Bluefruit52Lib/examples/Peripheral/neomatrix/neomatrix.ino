@@ -67,8 +67,10 @@ BLEUart bleuart;
 void setup()
 {
   Serial.begin(115200);
-  Serial.println(F("Adafruit Bluefruit NeoMatrix"));
-  Serial.println(F("----------------------------"));
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
+  Serial.println("Adafruit Bluefruit NeoMatrix");
+  Serial.println("----------------------------");
 
   Serial.println();
   Serial.println("Please connect using Bluefruit Connect LE application");
@@ -84,10 +86,9 @@ void setup()
 
   // Init Bluefruit
   Bluefruit.begin();
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52");
-  Bluefruit.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setConnectCallback(connect_callback);
 
   // Configure and Start Device Information Service
   bledis.setManufacturer("Adafruit Industries");
@@ -131,8 +132,11 @@ void startAdv(void)
 
 void connect_callback(uint16_t conn_handle)
 {
+  // Get the reference to current connection
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+
   char central_name[32] = { 0 };
-  Bluefruit.Gap.getPeerName(conn_handle, central_name, sizeof(central_name));
+  connection->getPeerName(central_name, sizeof(central_name));
 
   Serial.print("Connected to ");
   Serial.println(central_name);

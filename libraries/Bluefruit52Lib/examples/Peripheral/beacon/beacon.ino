@@ -34,6 +34,7 @@ BLEBeacon beacon(beaconUuid, 0x0000, 0x0000, -54);
 void setup() 
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
   Serial.println("Bluefruit52 Beacon Example");
   Serial.println("--------------------------\n");
@@ -42,9 +43,7 @@ void setup()
 
   // off Blue LED for lowest power consumption
   Bluefruit.autoConnLed(false);
-  
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(0);
+  Bluefruit.setTxPower(0);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52");
 
   // Manufacturer ID is required for Manufacturer Specific Data
@@ -90,4 +89,3 @@ void loop()
 {
   // loop is already suspended, CPU will not run loop() at all
 }
-

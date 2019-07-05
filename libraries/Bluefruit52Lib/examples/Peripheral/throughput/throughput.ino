@@ -33,6 +33,8 @@ BLEUart bleuart;
 void setup(void)
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
   Serial.println("Bluefruit52 Throughput Example");
   Serial.println("------------------------------\n");
 
@@ -42,11 +44,10 @@ void setup(void)
   Bluefruit.autoConnLed(true);
 
   Bluefruit.begin();
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52");
-  Bluefruit.setConnectCallback(connect_callback);
-  Bluefruit.setDisconnectCallback(disconnect_callback);
+  Bluefruit.Periph.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
 
   // Configure and Start Device Information Service
   bledis.setManufacturer("Adafruit Industries");
@@ -93,6 +94,11 @@ void connect_callback(uint16_t conn_handle)
   Serial.println("Connected");
 }
 
+/**
+ * Callback invoked when a connection is dropped
+ * @param conn_handle connection where this event happens
+ * @param reason is a BLE_HCI_STATUS_CODE which can be found in ble_hci.h
+ */
 void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
@@ -124,9 +130,9 @@ void loop(void)
     Serial.println(" bytes ...");
 
     start = millis();
-    while (remaining > 0)
+    while ( (remaining > 0) && Bluefruit.connected() && bleuart.notifyEnabled() )
     {
-      bleuart.print(TEST_STRING);
+      if ( !bleuart.print(TEST_STRING) ) break;
 
       sent      += TEST_STRLEN;
       remaining -= TEST_STRLEN;

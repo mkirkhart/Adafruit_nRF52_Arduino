@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     HardwarePWM.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -41,17 +41,28 @@ HardwarePWM HwPWM0(NRF_PWM0);
 HardwarePWM HwPWM1(NRF_PWM1);
 HardwarePWM HwPWM2(NRF_PWM2);
 
-HardwarePWM* HwPWMx[3] = { &HwPWM0, &HwPWM1, &HwPWM2 };
+#ifdef NRF_PWM3
+HardwarePWM HwPWM3(NRF_PWM3);
+#endif
+
+HardwarePWM* HwPWMx[] =
+{
+  &HwPWM0, &HwPWM1, &HwPWM2
+#ifdef NRF_PWM3
+  ,&HwPWM3
+#endif
+};
 
 HardwarePWM::HardwarePWM(NRF_PWM_Type* pwm)
 {
   _pwm = pwm;
-
-  _count = 0;
   arrclr(_seq0);
 
   _max_value = 255;
   _clock_div = PWM_PRESCALER_PRESCALER_DIV_1; // 16 Mhz
+
+  // FIXME workaround to fix bootloader 0.2.6 does not clean up PSEL[1] of PWM0
+  _pwm->PSEL.OUT[1] = 0xFFFFFFFFUL;
 }
 
 void HardwarePWM::setResolution(uint8_t bitnum)
@@ -78,19 +89,21 @@ void HardwarePWM::setClockDiv(uint8_t div)
  */
 bool HardwarePWM::addPin(uint8_t pin)
 {
-  VERIFY( isPinValid(pin) && (_count <= MAX_CHANNELS) );
+  // succeed if pin is already configured
+  if ( pin2channel(pin) >= 0 ) return true;
 
-  // Check if pin is already configured
-  for(uint8_t i=0; i<_count; i++)
-  {
-    if (_pwm->PSEL.OUT[i] == pin) return true;
-  }
+  int ch = -1;
 
-  if ((_count >= MAX_CHANNELS))
+  // find free slot which is not connected
+  for(int i=0; i<MAX_CHANNELS; i++)
   {
-    //Pin not already configured, but this HardwarePWM is full
-    return false;
+    if ( _pwm->PSEL.OUT[i] & PWM_PSEL_OUT_CONNECT_Msk )
+    {
+      ch = i;
+      break;
+    }
   }
+  VERIFY ( ch >= 0 );
 
   pinMode(pin, OUTPUT);
   digitalWrite(pin, LOW);
@@ -99,13 +112,31 @@ bool HardwarePWM::addPin(uint8_t pin)
   if ( enabled() )
   {
     _pwm->ENABLE = 0;
-    _pwm->PSEL.OUT[_count++] = pin;
+    _pwm->PSEL.OUT[ch] = g_ADigitalPinMap[pin];
     _pwm->ENABLE = 1;
     _start();
   }else
   {
-    _pwm->PSEL.OUT[_count++] = pin;
+    _pwm->PSEL.OUT[ch] = g_ADigitalPinMap[pin];
   }
+
+  return true;
+}
+
+bool HardwarePWM::removePin(uint8_t pin)
+{
+  int ch = pin2channel(pin);
+  VERIFY( ch >= 0 );
+
+  bool const en = enabled();
+
+  // Must disable before changing PSEL
+  if ( en ) _pwm->ENABLE = 0;
+
+  _pwm->PSEL.OUT[ch] = 0xFFFFFFFFUL;
+  _seq0[ch] = 0;
+
+  if ( en ) _pwm->ENABLE = 1;
 
   return true;
 }
@@ -153,7 +184,7 @@ void HardwarePWM::stop(void)
 
 bool HardwarePWM::writeChannel(uint8_t ch, uint16_t value, bool inverted )
 {
-  VERIFY( ch < _count );
+  VERIFY( ch < MAX_CHANNELS );
 
   _seq0[ch] = value | (inverted ? 0 : bit(15));
 

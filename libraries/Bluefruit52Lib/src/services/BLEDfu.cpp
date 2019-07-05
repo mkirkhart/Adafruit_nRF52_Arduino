@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEDfu.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2016, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -85,24 +85,26 @@ static uint16_t crc16(const uint8_t* data_p, uint8_t length)
   return crc;
 }
 
-static void bledfu_control_wr_authorize_cb(BLECharacteristic& chr, ble_gatts_evt_write_t* request)
+static void bledfu_control_wr_authorize_cb(uint16_t conn_hdl, BLECharacteristic* chr, ble_gatts_evt_write_t* request)
 {
-  if ( (request->handle == chr.handles().value_handle)  &&
+  if ( (request->handle == chr->handles().value_handle)  &&
        (request->op != BLE_GATTS_OP_PREP_WRITE_REQ)     &&
        (request->op != BLE_GATTS_OP_EXEC_WRITE_REQ_NOW) &&
        (request->op != BLE_GATTS_OP_EXEC_WRITE_REQ_CANCEL))
   {
+    BLEConnection* conn = Bluefruit.Connection(conn_hdl);
+
     ble_gatts_rw_authorize_reply_params_t reply = { .type = BLE_GATTS_AUTHORIZE_TYPE_WRITE };
 
-    if ( !chr.notifyEnabled() )
+    if ( !chr->notifyEnabled(conn_hdl) )
     {
       reply.params.write.gatt_status = BLE_GATT_STATUS_ATTERR_CPS_CCCD_CONFIG_ERROR;
-      sd_ble_gatts_rw_authorize_reply(Bluefruit.connHandle(), &reply);
+      sd_ble_gatts_rw_authorize_reply(conn_hdl, &reply);
       return;
     }
 
     reply.params.write.gatt_status = BLE_GATT_STATUS_SUCCESS;
-    sd_ble_gatts_rw_authorize_reply(Bluefruit.connHandle(), &reply);
+    sd_ble_gatts_rw_authorize_reply(conn_hdl, &reply);
 
     enum { START_DFU  = 1 };
     if ( request->data[0] == START_DFU )
@@ -116,6 +118,8 @@ static void bledfu_control_wr_authorize_cb(BLECharacteristic& chr, ble_gatts_evt
         uint16_t          crc16;
       }peer_data_t;
 
+      VERIFY_STATIC(offsetof(peer_data_t, crc16) == 60);
+
       /* Save Peer data
        * Peer data address is defined in bootloader linker @0x20007F80
        * - If bonded : save Security information
@@ -128,40 +132,57 @@ static void bledfu_control_wr_authorize_cb(BLECharacteristic& chr, ble_gatts_evt
 
       // Get CCCD
       uint16_t sysattr_len = sizeof(peer_data->sys_attr);
-      sd_ble_gatts_sys_attr_get(Bluefruit.connHandle(), peer_data->sys_attr, &sysattr_len, BLE_GATTS_SYS_ATTR_FLAG_SYS_SRVCS);
+      sd_ble_gatts_sys_attr_get(conn_hdl, peer_data->sys_attr, &sysattr_len, BLE_GATTS_SYS_ATTR_FLAG_SYS_SRVCS);
 
-      // Get Bond Data
-      Bluefruit._bledfu_get_bond_data(&peer_data->addr, &peer_data->irk, &peer_data->enc_key);
+      // Get Bond Data or using Address if not bonded
+      peer_data->addr = conn->getPeerAddr();
+
+      if ( conn->paired() )
+      {
+        bond_keys_t bkeys;
+
+        if ( conn->loadKeys(&bkeys) )
+        {
+          peer_data->addr    = bkeys.peer_id.id_addr_info;
+          peer_data->irk     = bkeys.peer_id.id_info;
+          peer_data->enc_key = bkeys.own_enc;
+        }
+      }
 
       // Calculate crc
       peer_data->crc16 = crc16((uint8_t*) peer_data, offsetof(peer_data_t, crc16));
 
       // Initiate DFU Sequence and reboot into DFU OTA mode
-      Bluefruit.disconnect();
-      Bluefruit.Advertising.stop();
+      Bluefruit.Advertising.restartOnDisconnect(false);
+      conn->disconnect();
 
       // Set GPReset to DFU OTA
       enum { DFU_OTA_MAGIC = 0xB1 };
-#if SD_VER < 500
-      sd_power_gpregret_clr(0xFF);
-      VERIFY_STATUS( sd_power_gpregret_set(DFU_OTA_MAGIC), RETURN_VOID);
-#else
-      sd_power_gpregret_clr(0, 0xFF);
-      VERIFY_STATUS( sd_power_gpregret_set(0, DFU_OTA_MAGIC), RETURN_VOID);
-#endif
-      VERIFY_STATUS( sd_softdevice_disable(), RETURN_VOID );
 
-      // Disable Systick to prevent Interrupt happens after changing vector table
-      bitClear(SysTick->CTRL, SysTick_CTRL_ENABLE_Pos);
+      sd_power_gpregret_clr(0, 0xFF);
+      VERIFY_STATUS( sd_power_gpregret_set(0, DFU_OTA_MAGIC), );
+      VERIFY_STATUS( sd_softdevice_disable(),  );
 
       // Disable all interrupts
+      #if defined(NRF52832_XXAA)
+      #define MAX_NUMBER_INTERRUPTS  39
+      #elif defined(NRF52840_XXAA)
+      #define MAX_NUMBER_INTERRUPTS  48
+      #endif
+
       NVIC_ClearPendingIRQ(SD_EVT_IRQn);
-      for(int i=0; i <= FPU_IRQn; i++)
+      for(int i=0; i < MAX_NUMBER_INTERRUPTS; i++)
       {
         NVIC_DisableIRQ( (IRQn_Type) i );
       }
 
-      VERIFY_STATUS( sd_softdevice_vector_table_base_set(NRF_UICR->NRFFW[0]), RETURN_VOID);
+      // Clear RTC1 timer to prevent Interrupt happens after changing vector table
+//      NRF_RTC1->EVTENCLR    = RTC_EVTEN_COMPARE0_Msk;
+//      NRF_RTC1->INTENCLR    = RTC_INTENSET_COMPARE0_Msk;
+//      NRF_RTC1->TASKS_STOP  = 1;
+//      NRF_RTC1->TASKS_CLEAR = 1;
+
+      VERIFY_STATUS( sd_softdevice_vector_table_base_set(NRF_UICR->NRFFW[0]), );
 
       __set_CONTROL(0); // switch to MSP, required if using FreeRTOS
       bootloader_util_app_start(NRF_UICR->NRFFW[0]);

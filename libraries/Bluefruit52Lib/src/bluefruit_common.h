@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     bluefruit_common.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -38,10 +38,11 @@
 
 #include <Arduino.h>
 #include "ble.h"
-#include "ble_hci.h"
 #include "nrf_sdm.h"
 
 #include "utility/AdaMsg.h"
+
+#define CFG_MAX_DEVNAME_LEN                     32
 
 #define BLE_GENERIC_TIMEOUT                     100
 
@@ -62,5 +63,9 @@
 
 // Converts an integer of 625ms units to msecs
 #define MS625TO1000(u625) ( ((u625)*5) / 8 )
+
+
+typedef void (*ble_connect_callback_t    ) (uint16_t conn_hdl);
+typedef void (*ble_disconnect_callback_t ) (uint16_t conn_hdl, uint8_t reason);
 
 #endif /* BLUEFRUIT_COMMON_H_ */

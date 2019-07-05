@@ -40,6 +40,8 @@ byte note_sequence[] = {
 void setup()
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
   Serial.println("Adafruit Bluefruit52 MIDI over Bluetooth LE Example");
 
   // Config the peripheral connection with maximum bandwidth 
@@ -49,7 +51,7 @@ void setup()
 
   Bluefruit.begin();
   Bluefruit.setName("Bluefruit52 MIDI");
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
 
   // Setup the on board blue LED to be enabled on CONNECT
   Bluefruit.autoConnLed(true);

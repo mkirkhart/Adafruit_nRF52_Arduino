@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEDiscovery.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -52,7 +52,7 @@ class BLEDiscovery
     AdaMsg _adamsg;
     bool   _begun;
 
-    void  _event_handler(ble_evt_t* evt);
+    void  _eventHandler(ble_evt_t* evt);
 
   public:
     BLEDiscovery(void);
@@ -92,6 +92,12 @@ class BLEDiscovery
     uint8_t  discoverCharacteristic(uint16_t conn_handle, BLEClientCharacteristic& chr1, BLEClientCharacteristic& chr2, BLEClientCharacteristic& chr3, BLEClientCharacteristic& chr4, BLEClientCharacteristic& chr5)
     {
       BLEClientCharacteristic* chr_arr[] = {&chr1, &chr2, &chr3, &chr4, &chr5};
+      return discoverCharacteristic(conn_handle, chr_arr, arrcount(chr_arr));
+    }
+
+    uint8_t  discoverCharacteristic(uint16_t conn_handle, BLEClientCharacteristic& chr1, BLEClientCharacteristic& chr2, BLEClientCharacteristic& chr3, BLEClientCharacteristic& chr4, BLEClientCharacteristic& chr5, BLEClientCharacteristic& chr6)
+    {
+      BLEClientCharacteristic* chr_arr[] = {&chr1, &chr2, &chr3, &chr4, &chr5, &chr6};
       return discoverCharacteristic(conn_handle, chr_arr, arrcount(chr_arr));
     }
 

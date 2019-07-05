@@ -34,6 +34,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason);
 void setup()
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
   Serial.println("Bluefruit52 Heath Thermometer Example");
   Serial.println("-------------------------------------\n");
 
@@ -43,8 +45,8 @@ void setup()
   Bluefruit.setName("Bluefruit52");
 
   // Set the connect/disconnect callback handlers
-  Bluefruit.setConnectCallback(connect_callback);
-  Bluefruit.setDisconnectCallback(disconnect_callback);
+  Bluefruit.Periph.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
 
   // Configure and Start the Device Information Service
   Serial.println("Configuring the Device Information Service");
@@ -149,13 +151,21 @@ void setupHTM(void)
 
 void connect_callback(uint16_t conn_handle)
 {
+  // Get the reference to current connection
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+
   char central_name[32] = { 0 };
-  Bluefruit.Gap.getPeerName(conn_handle, central_name, sizeof(central_name));
+  connection->getPeerName(central_name, sizeof(central_name));
 
   Serial.print("Connected to ");
   Serial.println(central_name);
 }
 
+/**
+ * Callback invoked when a connection is dropped
+ * @param conn_handle connection where this event happens
+ * @param reason is a BLE_HCI_STATUS_CODE which can be found in ble_hci.h
+ */
 void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
@@ -165,7 +175,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   Serial.println("Advertising!");
 }
 
-void cccd_callback(BLECharacteristic& chr, uint16_t cccd_value)
+void cccd_callback(uint16_t conn_hdl, BLECharacteristic* chr, uint16_t cccd_value)
 {
     // Display the raw request packet
     Serial.print("CCCD Updated: ");
@@ -175,8 +185,8 @@ void cccd_callback(BLECharacteristic& chr, uint16_t cccd_value)
 
     // Check the characteristic this CCCD update is associated with in case
     // this handler is used for multiple CCCD records.
-    if (chr.uuid == htmc.uuid) {
-        if (chr.indicateEnabled()) {
+    if (chr->uuid == htmc.uuid) {
+        if (chr->indicateEnabled(conn_hdl)) {
             Serial.println("Temperature Measurement 'Indicate' enabled");
         } else {
             Serial.println("Temperature Measurement 'Indicate' disabled");
@@ -195,7 +205,7 @@ void loop()
     
     // Note: We use .indicate instead of .write!
     // If it is connected but CCCD is not enabled
-    // The characteristic's value is still updated although notification is not sent
+    // The characteristic's value is still updated although indicate is not sent
     if ( htmc.indicate(htmdata, sizeof(htmdata)) ){
       Serial.print("Temperature Measurement updated to: "); Serial.println(tempvalue); 
     }else{
@@ -208,4 +218,3 @@ void loop()
   // Only send update once per second
   delay(1000);
 }
-

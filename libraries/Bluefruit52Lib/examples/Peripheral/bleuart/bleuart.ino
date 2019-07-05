@@ -12,24 +12,22 @@
  any redistribution
 *********************************************************************/
 #include <bluefruit.h>
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
 
 // BLE Service
-BLEDis  bledis;
-BLEUart bleuart;
-BLEBas  blebas;
-
-// Software Timer for blinking RED LED
-SoftwareTimer blinkTimer;
+BLEDfu  bledfu;  // OTA DFU service
+BLEDis  bledis;  // device information
+BLEUart bleuart; // uart over ble
+BLEBas  blebas;  // battery
 
 void setup()
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+  
   Serial.println("Bluefruit52 BLEUART Example");
   Serial.println("---------------------------\n");
-
-  // Initialize blinkTimer for 1000 ms and start it
-  blinkTimer.begin(1000, blink_timer_callback);
-  blinkTimer.start();
 
   // Setup the BLE LED to be enabled on CONNECT
   // Note: This is actually the default behaviour, but provided
@@ -42,12 +40,14 @@ void setup()
   Bluefruit.configPrphBandwidth(BANDWIDTH_MAX);
 
   Bluefruit.begin();
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52");
   //Bluefruit.setName(getMcuUniqueID()); // useful testing with multiple central connections
-  Bluefruit.setConnectCallback(connect_callback);
-  Bluefruit.setDisconnectCallback(disconnect_callback);
+  Bluefruit.Periph.setConnectCallback(connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
+
+  // To be consistent OTA DFU should be added first if it exists
+  bledfu.begin();
 
   // Configure and Start Device Information Service
   bledis.setManufacturer("Adafruit Industries");
@@ -116,20 +116,26 @@ void loop()
     ch = (uint8_t) bleuart.read();
     Serial.write(ch);
   }
-
-  // Request CPU to enter low-power mode until an event/interrupt occurs
-  waitForEvent();
 }
 
+// callback invoked when central connects
 void connect_callback(uint16_t conn_handle)
 {
+  // Get the reference to current connection
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+
   char central_name[32] = { 0 };
-  Bluefruit.Gap.getPeerName(conn_handle, central_name, sizeof(central_name));
+  connection->getPeerName(central_name, sizeof(central_name));
 
   Serial.print("Connected to ");
   Serial.println(central_name);
 }
 
+/**
+ * Callback invoked when a connection is dropped
+ * @param conn_handle connection where this event happens
+ * @param reason is a BLE_HCI_STATUS_CODE which can be found in ble_hci.h
+ */
 void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
@@ -138,39 +144,3 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   Serial.println();
   Serial.println("Disconnected");
 }
-
-/**
- * Software Timer callback is invoked via a built-in FreeRTOS thread with
- * minimal stack size. Therefore it should be as simple as possible. If
- * a periodically heavy task is needed, please use Scheduler.startLoop() to
- * create a dedicated task for it.
- * 
- * More information http://www.freertos.org/RTOS-software-timer.html
- */
-void blink_timer_callback(TimerHandle_t xTimerID)
-{
-  (void) xTimerID;
-  digitalToggle(LED_RED);
-}
-
-/**
- * RTOS Idle callback is automatically invoked by FreeRTOS
- * when there are no active threads. E.g when loop() calls delay() and
- * there is no bluetooth or hw event. This is the ideal place to handle
- * background data.
- * 
- * NOTE: FreeRTOS is configured as tickless idle mode. After this callback
- * is executed, if there is time, freeRTOS kernel will go into low power mode.
- * Therefore waitForEvent() should not be called in this callback.
- * http://www.freertos.org/low-power-tickless-rtos.html
- * 
- * WARNING: This function MUST NOT call any blocking FreeRTOS API 
- * such as delay(), xSemaphoreTake() etc ... for more information
- * http://www.freertos.org/a00016.html
- */
-void rtos_idle_callback(void)
-{
-  // Don't call any other FreeRTOS blocking API()
-  // Perform background task(s) here
-}
-

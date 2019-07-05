@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEBas.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -52,7 +52,9 @@ class BLEBas : public BLEService
     virtual err_t begin(void);
 
     bool write (uint8_t level);
+
     bool notify(uint8_t level);
+    bool notify(uint16_t conn_hdl, uint8_t level);
 };
 
 

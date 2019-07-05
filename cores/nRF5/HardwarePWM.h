@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     HardwarePWM.h
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,11 @@
 #include "common_inc.h"
 #include "nrf.h"
 
+#ifdef NRF52840_XXAA
+#define HWPWM_MODULE_NUM    4
+#else
 #define HWPWM_MODULE_NUM    3
+#endif
 
 class HardwarePWM
 {
@@ -47,10 +51,9 @@ class HardwarePWM
     enum { MAX_CHANNELS = 4 }; // Max channel per group
     NRF_PWM_Type* _pwm;
 
-    uint8_t  _count;
     uint16_t _seq0[MAX_CHANNELS];
 
-    uint8_t  _max_value;
+    uint16_t  _max_value;
     uint8_t  _clock_div;
 
     void _start(void);
@@ -65,16 +68,19 @@ class HardwarePWM
     void setClockDiv(uint8_t div);      // value is PWM_PRESCALER_PRESCALER_DIV_x, DIV1 is 16Mhz
 
     bool addPin     (uint8_t pin);
-    int  pin2channel(uint8_t pin) ATTR_ALWAYS_INLINE
+    bool removePin  (uint8_t pin);
+
+    int  pin2channel(uint8_t pin)
     {
-      for(int i=0; i<_count; i++)
+      pin = g_ADigitalPinMap[pin];
+      for(int i=0; i<MAX_CHANNELS; i++)
       {
         if ( _pwm->PSEL.OUT[i] == pin ) return i;
       }
       return (-1);
     }
 
-    bool checkPin(uint8_t pin) ATTR_ALWAYS_INLINE
+    bool checkPin(uint8_t pin)
     {
       return pin2channel(pin) >= 0;
     }
@@ -84,8 +90,8 @@ class HardwarePWM
     void stop  (void);
 
     // Generate PWM
-    bool     writePin    (uint8_t pin, uint16_t value, bool inverted = false);
-    bool     writeChannel(uint8_t ch , uint16_t value, bool inverted = false);
+    bool writePin    (uint8_t pin, uint16_t value, bool inverted = false);
+    bool writeChannel(uint8_t ch , uint16_t value, bool inverted = false);
 
     // Read current set value
     uint16_t readPin     (uint8_t pin);
@@ -96,6 +102,10 @@ extern HardwarePWM HwPWM0;
 extern HardwarePWM HwPWM1;
 extern HardwarePWM HwPWM2;
 
-extern HardwarePWM* HwPWMx[3];
+#ifdef NRF_PWM3
+extern HardwarePWM HwPWM3;
+#endif
+
+extern HardwarePWM* HwPWMx[];
 
 #endif /* HARDWAREPWM_H_ */

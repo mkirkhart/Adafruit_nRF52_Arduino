@@ -18,12 +18,14 @@
  */
 #include <bluefruit.h>
 
-BLEClientDis  clientDis;
-BLEClientUart clientUart;
+BLEClientBas  clientBas;  // battery client
+BLEClientDis  clientDis;  // device information client
+BLEClientUart clientUart; // bleuart client
 
 void setup()
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
   Serial.println("Bluefruit52 Central BLEUART Example");
   Serial.println("-----------------------------------\n");
@@ -33,6 +35,9 @@ void setup()
   Bluefruit.begin(0, 1);
   
   Bluefruit.setName("Bluefruit52 Central");
+
+  // Configure Battyer client
+  clientBas.begin();  
 
   // Configure DIS client
   clientDis.begin();
@@ -74,6 +79,11 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
 
     // Connect to device with bleuart service in advertising
     Bluefruit.Central.connect(report);
+  }else
+  {      
+    // For Softdevice v6: after received a report, scanner will be paused
+    // We need to call Scanner resume() to continue scanning
+    Bluefruit.Scanner.resume();
   }
 }
 
@@ -85,7 +95,7 @@ void connect_callback(uint16_t conn_handle)
 {
   Serial.println("Connected");
 
-  Serial.print("Dicovering DIS ... ");
+  Serial.print("Dicovering Device Information ... ");
   if ( clientDis.discover(conn_handle) )
   {
     Serial.println("Found it");
@@ -108,10 +118,24 @@ void connect_callback(uint16_t conn_handle)
     }
 
     Serial.println();
-  }  
+  }else
+  {
+    Serial.println("Found NONE");
+  }
+
+  Serial.print("Dicovering Battery ... ");
+  if ( clientBas.discover(conn_handle) )
+  {
+    Serial.println("Found it");
+    Serial.print("Battery level: ");
+    Serial.print(clientBas.read());
+    Serial.println("%");
+  }else
+  {
+    Serial.println("Found NONE");
+  }
 
   Serial.print("Discovering BLE Uart Service ... ");
-
   if ( clientUart.discover(conn_handle) )
   {
     Serial.println("Found it");
@@ -124,15 +148,15 @@ void connect_callback(uint16_t conn_handle)
   {
     Serial.println("Found NONE");
     
-    // disconect since we couldn't find bleuart service
-    Bluefruit.Central.disconnect(conn_handle);
+    // disconnect since we couldn't find bleuart service
+    Bluefruit.disconnect(conn_handle);
   }  
 }
 
 /**
  * Callback invoked when a connection is dropped
  * @param conn_handle
- * @param reason
+ * @param reason is a BLE_HCI_STATUS_CODE which can be found in ble_hci.h
  */
 void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
@@ -180,4 +204,3 @@ void loop()
     }
   }
 }
-

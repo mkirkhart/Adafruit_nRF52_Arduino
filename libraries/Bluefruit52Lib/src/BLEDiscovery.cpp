@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEDiscovery.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -82,7 +82,11 @@ bool BLEDiscovery::_discoverService(uint16_t conn_handle, BLEClientService& svc,
   int32_t bytecount = _adamsg.waitUntilComplete(BLE_DISCOVERY_TIMEOUT);
 
   // timeout or has no data (due to GATT Error)
-  if ( bytecount <= 0 ) return false;
+  if ( bytecount <= 0 )
+  {
+    LOG_LV1("DISC", "[SVC] timeout or error", start_handle);
+    return false;
+  }
 
   // Check the discovered UUID with input one
   if ( (disc_svc.count) && (svc.uuid == disc_svc.services[0].uuid) )
@@ -140,7 +144,10 @@ uint8_t BLEDiscovery::discoverCharacteristic(uint16_t conn_handle, BLEClientChar
           // only discover CCCD descriptor
           if (disc_chr->chars[d].char_props.notify || disc_chr->chars[d].char_props.indicate )
           {
-            ble_gattc_handle_range_t range = { disc_chr->chars[d].handle_value + 1, _hdl_range.end_handle };
+            ble_gattc_handle_range_t range = {
+              .start_handle = (uint16_t) (disc_chr->chars[d].handle_value + 1),
+              .end_handle   = _hdl_range.end_handle
+            };
 
             if ( range.start_handle <= range.end_handle  )
             {
@@ -192,7 +199,7 @@ uint16_t BLEDiscovery::_discoverDescriptor(uint16_t conn_handle, ble_gattc_evt_d
 }
 
 
-void BLEDiscovery::_event_handler(ble_evt_t* evt)
+void BLEDiscovery::_eventHandler(ble_evt_t* evt)
 {
   ble_gattc_evt_t* gattc = &evt->evt.gattc_evt;
 

@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     SwRotaryEncoder.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -138,7 +138,7 @@ void SwRotaryEncoder::_irq_handler(void)
     _abs += step;
     _a_last = bita;
 
-    if (_cb) ada_callback_fromISR(NULL, _cb, step);
+    if (_cb) ada_callback(NULL, 0, _cb, step);
   }
 }
 

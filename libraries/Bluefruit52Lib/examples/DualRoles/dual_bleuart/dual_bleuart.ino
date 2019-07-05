@@ -21,6 +21,9 @@
  */
 #include <bluefruit.h>
 
+// OTA DFU service
+BLEDfu bledfu;
+
 // Peripheral uart service
 BLEUart bleuart;
 
@@ -30,6 +33,7 @@ BLEClientUart clientUart;
 void setup()
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
   Serial.println("Bluefruit52 Dual Role BLEUART Example");
   Serial.println("-------------------------------------\n");
@@ -37,17 +41,19 @@ void setup()
   // Initialize Bluefruit with max concurrent connections as Peripheral = 1, Central = 1
   // SRAM usage required by SoftDevice will increase with number of connections
   Bluefruit.begin(1, 1);
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52 duo");
 
   // Callbacks for Peripheral
-  Bluefruit.setConnectCallback(prph_connect_callback);
-  Bluefruit.setDisconnectCallback(prph_disconnect_callback);
+  Bluefruit.Periph.setConnectCallback(prph_connect_callback);
+  Bluefruit.Periph.setDisconnectCallback(prph_disconnect_callback);
 
   // Callbacks for Central
   Bluefruit.Central.setConnectCallback(cent_connect_callback);
   Bluefruit.Central.setDisconnectCallback(cent_disconnect_callback);
+
+  // To be consistent OTA DFU should be added first if it exists
+  bledfu.begin();
 
   // Configure and Start BLE Uart Service
   bleuart.begin();
@@ -114,8 +120,11 @@ void loop()
  *------------------------------------------------------------------*/
 void prph_connect_callback(uint16_t conn_handle)
 {
+  // Get the reference to current connection
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+
   char peer_name[32] = { 0 };
-  Bluefruit.Gap.getPeerName(conn_handle, peer_name, sizeof(peer_name));
+  connection->getPeerName(peer_name, sizeof(peer_name));
 
   Serial.print("[Prph] Connected to ");
   Serial.println(peer_name);
@@ -130,8 +139,10 @@ void prph_disconnect_callback(uint16_t conn_handle, uint8_t reason)
   Serial.println("[Prph] Disconnected");
 }
 
-void prph_bleuart_rx_callback(void)
+void prph_bleuart_rx_callback(uint16_t conn_handle)
 {
+  (void) conn_handle;
+  
   // Forward data from Mobile to our peripheral
   char str[20+1] = { 0 };
   bleuart.read(str, 20);
@@ -153,20 +164,19 @@ void prph_bleuart_rx_callback(void)
  *------------------------------------------------------------------*/
 void scan_callback(ble_gap_evt_adv_report_t* report)
 {
-  // Check if advertising contain BleUart service
-  if ( Bluefruit.Scanner.checkReportForService(report, clientUart) )
-  {
-    Serial.println("BLE UART service detected. Connecting ... ");
-
-    // Connect to device with bleuart service in advertising
-    Bluefruit.Central.connect(report);
-  }
+  // Since we configure the scanner with filterUuid()
+  // Scan callback only invoked for device with bleuart service advertised  
+  // Connect to the device with bleuart service in advertising packet  
+  Bluefruit.Central.connect(report);
 }
 
 void cent_connect_callback(uint16_t conn_handle)
 {
+  // Get the reference to current connection
+  BLEConnection* connection = Bluefruit.Connection(conn_handle);
+
   char peer_name[32] = { 0 };
-  Bluefruit.Gap.getPeerName(conn_handle, peer_name, sizeof(peer_name));
+  connection->getPeerName(peer_name, sizeof(peer_name));
 
   Serial.print("[Cent] Connected to ");
   Serial.println(peer_name);;
@@ -177,8 +187,8 @@ void cent_connect_callback(uint16_t conn_handle)
     clientUart.enableTXD();
   }else
   {
-    // disconect since we couldn't find bleuart service
-    Bluefruit.Central.disconnect(conn_handle);
+    // disconnect since we couldn't find bleuart service
+    Bluefruit.disconnect(conn_handle);
   }  
 }
 
@@ -213,4 +223,3 @@ void cent_bleuart_rx_callback(BLEClientUart& cent_uart)
     clientUart.println("[Cent] Peripheral role not connected");
   }  
 }
-

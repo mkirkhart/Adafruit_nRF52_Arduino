@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEClientCharacteristic.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -168,7 +168,10 @@ uint16_t BLEClientCharacteristic::read(void* buffer, uint16_t bufsize)
 {
   VERIFY( _chr.char_props.read, 0 );
 
-  uint16_t const max_payload = Bluefruit.Gap.getMTU( _service->connHandle() ) - 3;
+  BLEConnection* conn = Bluefruit.Connection( _service->connHandle() );
+  VERIFY(conn, 0);
+
+  uint16_t const max_payload = conn->getMtu() - 3;
 
   _adamsg.prepare(buffer, bufsize);
   VERIFY_STATUS( sd_ble_gattc_read(_service->connHandle(), _chr.handle_value, 0), 0);
@@ -202,7 +205,10 @@ uint16_t BLEClientCharacteristic::write_resp(const void* data, uint16_t len)
 {
   VERIFY( _chr.char_props.write, 0 );
 
-  uint16_t const max_payload = Bluefruit.Gap.getMTU( _service->connHandle() ) - 3;
+  BLEConnection* conn = Bluefruit.Connection( _service->connHandle() );
+  VERIFY(conn, 0);
+
+  uint16_t const max_payload = conn->getMtu() - 3;
 
   const bool long_write = (len > max_payload);
   int32_t count = 0;
@@ -221,7 +227,7 @@ uint16_t BLEClientCharacteristic::write_resp(const void* data, uint16_t len)
     };
 
     _adamsg.prepare( (void*) data, len);
-    VERIFY_STATUS ( sd_ble_gattc_write(_service->connHandle(), &param) );
+    VERIFY_STATUS(sd_ble_gattc_write(_service->connHandle(), &param), 0);
 
     // len is always 0 in BLE_GATTC_EVT_WRITE_RSP for BLE_GATT_OP_WRITE_REQ
     count = (_adamsg.waitUntilComplete(BLE_GENERIC_TIMEOUT) < 0 ? 0 : len);
@@ -230,7 +236,6 @@ uint16_t BLEClientCharacteristic::write_resp(const void* data, uint16_t len)
   {
     /*------------- Long Write Sequence -------------*/
     // For BLE_GATT_OP_PREP_WRITE_REQ, 2 bytes are used for offset
-
     ble_gattc_write_params_t param =
     {
         .write_op = BLE_GATT_OP_PREP_WRITE_REQ,
@@ -242,7 +247,7 @@ uint16_t BLEClientCharacteristic::write_resp(const void* data, uint16_t len)
     };
 
     _adamsg.prepare( (void*) data, len);
-    VERIFY_STATUS ( sd_ble_gattc_write(_service->connHandle(), &param) );
+    VERIFY_STATUS(sd_ble_gattc_write(_service->connHandle(), &param), 0);
     count = _adamsg.waitUntilComplete( (len/(max_payload-2) + 1) * BLE_GENERIC_TIMEOUT );
 
     // delay to swallow last WRITE RESPONSE
@@ -276,7 +281,10 @@ uint16_t BLEClientCharacteristic::write(const void* data, uint16_t len)
 {
 //  VERIFY( _chr.char_props.write_wo_resp, 0 );
 
-  uint16_t const max_payload = Bluefruit.Gap.getMTU( _service->connHandle() ) - 3;
+  BLEConnection* conn = Bluefruit.Connection( _service->connHandle() );
+  VERIFY(conn, 0);
+
+  uint16_t const max_payload = conn->getMtu() - 3;
   const uint8_t* u8data = (const uint8_t*) data;
 
   // Break into multiple packet if needed
@@ -284,7 +292,7 @@ uint16_t BLEClientCharacteristic::write(const void* data, uint16_t len)
   while( remaining )
   {
     // TODO only Write without response consume a TX buffer
-    if ( !Bluefruit.Gap.getWriteCmdPacket(_service->connHandle()) )  return NRF_ERROR_RESOURCES; //BLE_ERROR_NO_TX_PACKETS;
+    if ( !conn->getWriteCmdPacket() ) break;
 
     uint16_t packet_len = min16(max_payload, remaining);
 
@@ -304,7 +312,7 @@ uint16_t BLEClientCharacteristic::write(const void* data, uint16_t len)
     u8data    += packet_len;
   }
 
-  return len;
+  return len-remaining;
 }
 
 uint16_t BLEClientCharacteristic::write8(uint8_t value)
@@ -326,7 +334,6 @@ uint16_t BLEClientCharacteristic::write32(int value)
 {
   return write32( (uint32_t) value);
 }
-
 
 void BLEClientCharacteristic::setNotifyCallback(notify_cb_t fp, bool useAdaCallback)
 {
@@ -355,7 +362,8 @@ bool BLEClientCharacteristic::writeCCCD(uint16_t value)
   };
 
   // TODO only Write without response consume a TX buffer
-  if ( !Bluefruit.Gap.getWriteCmdPacket(conn_handle) )  return NRF_ERROR_RESOURCES; //BLE_ERROR_NO_TX_PACKETS;
+  BLEConnection* conn = Bluefruit.Connection(conn_handle);
+  VERIFY( conn && conn->getWriteCmdPacket() );
 
   VERIFY_STATUS( sd_ble_gattc_write(conn_handle, &param), false );
 
@@ -405,12 +413,7 @@ void BLEClientCharacteristic::_eventHandler(ble_evt_t* evt)
             // use AdaCallback or invoke directly
             if (_use_ada_cb.notify)
             {
-              uint8_t* data = (uint8_t*) rtos_malloc(hvx->len);
-              if (!data) return;
-              memcpy(data, hvx->data, hvx->len);
-
-              // data is free by callback
-              ada_callback(data, _notify_cb, this, data, hvx->len);
+              ada_callback(hvx->data, hvx->len, _notify_cb, this, hvx->data, hvx->len);
             }else
             {
               _notify_cb(this, hvx->data, hvx->len);
@@ -424,12 +427,7 @@ void BLEClientCharacteristic::_eventHandler(ble_evt_t* evt)
             // use AdaCallback or invoke directly
             if (_use_ada_cb.indicate)
             {
-              uint8_t* data = (uint8_t*) rtos_malloc(hvx->len);
-              if (!data) return;
-              memcpy(data, hvx->data, hvx->len);
-
-              // data is free by callback
-              ada_callback(data, _indicate_cb, this, data, hvx->len);
+              ada_callback(hvx->data, hvx->len, _indicate_cb, this, hvx->data, hvx->len);
             }else
             {
               _indicate_cb(this, hvx->data, hvx->len);
@@ -462,15 +460,17 @@ void BLEClientCharacteristic::_eventHandler(ble_evt_t* evt)
       {
         // len is known to be zero for WRITE_REQ
         _adamsg.complete();
-      }else if ( wr_rsp->write_op == BLE_GATT_OP_PREP_WRITE_REQ)
+      }
+      else if ( wr_rsp->write_op == BLE_GATT_OP_PREP_WRITE_REQ)
       {
-        uint16_t const max_payload = Bluefruit.Gap.getMTU( _service->connHandle() ) - 3;
+        BLEConnection* conn = Bluefruit.Connection( _service->connHandle() );
+
+        uint16_t const max_payload = conn->getMtu() - 3;
         uint16_t packet_len = min16(_adamsg.remaining, max_payload-2);
 
-        // still has data, continue to prepare
         if ( packet_len )
         {
-          // Long Write Prepare
+          // still has data, continue to prepare Long Write sequence
           ble_gattc_write_params_t param =
           {
               .write_op = BLE_GATT_OP_PREP_WRITE_REQ,
@@ -488,7 +488,7 @@ void BLEClientCharacteristic::_eventHandler(ble_evt_t* evt)
           }
         }else
         {
-          // Long Write Execute
+          // All data is prepared, execute Long Write
           ble_gattc_write_params_t param =
           {
               .write_op = BLE_GATT_OP_EXEC_WRITE_REQ,
@@ -512,7 +512,9 @@ void BLEClientCharacteristic::_eventHandler(ble_evt_t* evt)
 
     case BLE_GATTC_EVT_READ_RSP:
     {
-      uint16_t const max_payload = Bluefruit.Gap.getMTU( _service->connHandle() ) - 3;
+      BLEConnection* conn = Bluefruit.Connection( _service->connHandle() );
+
+      uint16_t const max_payload = conn->getMtu() - 3;
       ble_gattc_evt_read_rsp_t* rd_rsp = (ble_gattc_evt_read_rsp_t*) &evt->evt.gattc_evt.params.read_rsp;
 
       // Give up if failed (BLE_GATT_STATUS_ATTERR_INVALID_OFFSET usually)

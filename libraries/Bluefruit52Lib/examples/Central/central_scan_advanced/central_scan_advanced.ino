@@ -21,6 +21,7 @@
 void setup() 
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
 
   Serial.println("Bluefruit52 Central ADV Scan Example");
   Serial.println("------------------------------------\n");
@@ -28,9 +29,7 @@ void setup()
   // Initialize Bluefruit with maximum connections as Peripheral = 0, Central = 1
   // SRAM usage required by SoftDevice will increase dramatically with number of connections
   Bluefruit.begin(0, 1);
-  
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
 
   /* Set the device name */
   Bluefruit.setName("Bluefruit52");
@@ -58,12 +57,13 @@ void setup()
 
 void scan_callback(ble_gap_evt_adv_report_t* report)
 {
+  PRINT_LOCATION();
   uint8_t len = 0;
   uint8_t buffer[32];
   memset(buffer, 0, sizeof(buffer));
   
   /* Display the timestamp and device address */
-  if (report->scan_rsp)
+  if (report->type.scan_response)
   {
     Serial.printf("[SR%10d] Packet received from ", millis());
   }
@@ -76,11 +76,11 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
   Serial.print("\n");
 
   /* Raw buffer contents */
-  Serial.printf("%14s %d bytes\n", "PAYLOAD", report->dlen);
-  if (report->dlen)
+  Serial.printf("%14s %d bytes\n", "PAYLOAD", report->data.len);
+  if (report->data.len)
   {
     Serial.printf("%15s", " ");
-    Serial.printBuffer(report->data, report->dlen, '-');
+    Serial.printBuffer(report->data.p_data, report->data.len, '-');
     Serial.println();
   }
 
@@ -89,20 +89,20 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
 
   /* Adv Type */
   Serial.printf("%14s ", "ADV TYPE");
-  switch (report->type)
+  if ( report->type.connectable ) 
   {
-    case BLE_GAP_ADV_TYPE_ADV_IND:
-      Serial.printf("Connectable undirected\n");
-      break;
-    case BLE_GAP_ADV_TYPE_ADV_DIRECT_IND:
-      Serial.printf("Connectable directed\n");
-      break;
-    case BLE_GAP_ADV_TYPE_ADV_SCAN_IND:
-      Serial.printf("Scannable undirected\n");
-      break;
-    case BLE_GAP_ADV_TYPE_ADV_NONCONN_IND:
-      Serial.printf("Non-connectable undirected\n");
-      break;
+    Serial.print("Connectable ");
+  }else
+  {
+    Serial.print("Non-connectable ");
+  }
+  
+  if ( report->type.directed )
+  {
+    Serial.println("directed");
+  }else
+  {
+    Serial.println("undirected");
   }
 
   /* Shortened Local Name */
@@ -177,6 +177,10 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
   }  
 
   Serial.println();
+
+  // For Softdevice v6: after received a report, scanner will be paused
+  // We need to call Scanner resume() to continue scanning
+  Bluefruit.Scanner.resume();
 }
 
 void printUuid16List(uint8_t* buffer, uint8_t len)
@@ -208,9 +212,5 @@ void printUuid128List(uint8_t* buffer, uint8_t len)
 
 void loop() 
 {
-  // Toggle both LEDs every 1 second
-  digitalToggle(LED_RED);
-
-  delay(1000);
+  // nothing to do
 }
-

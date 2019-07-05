@@ -14,6 +14,10 @@
 
 #include <bluefruit.h>
 
+// OTA DFU service
+BLEDfu bledfu;
+
+// Uart over BLE service
 BLEUart bleuart;
 
 // Function prototypes for packetparser.cpp
@@ -27,13 +31,17 @@ extern uint8_t packetbuffer[];
 void setup(void)
 {
   Serial.begin(115200);
+  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+
   Serial.println(F("Adafruit Bluefruit52 Controller App Example"));
   Serial.println(F("-------------------------------------------"));
 
   Bluefruit.begin();
-  // Set max power. Accepted values are: -40, -30, -20, -16, -12, -8, -4, 0, 4
-  Bluefruit.setTxPower(4);
+  Bluefruit.setTxPower(4);    // Check bluefruit.h for supported values
   Bluefruit.setName("Bluefruit52");
+
+  // To be consistent OTA DFU should be added first if it exists
+  bledfu.begin();
 
   // Configure and start the BLE Uart service
   bleuart.begin();

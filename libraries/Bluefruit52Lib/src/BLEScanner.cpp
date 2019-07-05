@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEScanner.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -38,33 +38,36 @@
 
 BLEScanner::BLEScanner(void)
 {
+  _report_data.p_data  = _scan_data;
+  _report_data.len     = BLE_GAP_SCAN_BUFFER_MAX;
+
+  _conn_mask            = 0;
   _runnning            = false;
   _start_if_disconnect = true;
 
   _filter_rssi         = INT8_MIN;
-
   _filter_msd_en       = false;
   _filter_msd_id       = 0; // Irrelevant
-
   _filter_uuid_count   = 0;
   _filter_uuid         = NULL;
 
   _rx_cb               = NULL;
   _stop_cb             = NULL;
 
-  _param  = (ble_gap_scan_params_t) {
-    .active      = 0,
-#if SD_VER < 500
-    .selective   = 0,
-    .p_whitelist = NULL,
-#else
-    .use_whitelist  = 0,
-    .adv_dir_report = 0,
-#endif
-    .interval    = BLE_SCAN_INTERVAL_DFLT,
-    .window      = BLE_SCAN_WINDOW_DFLT,
-    .timeout     = 0, // no timeout
-  };
+  _param  = ((ble_gap_scan_params_t) {
+    // TODO Extended Adv on secondary channels
+    .extended               = 0,
+    .report_incomplete_evts = 0,
+
+    .active         = 0,
+    .filter_policy  = BLE_GAP_SCAN_FP_ACCEPT_ALL,
+    .scan_phys      = BLE_GAP_PHY_AUTO,
+
+    .interval       = BLE_SCAN_INTERVAL_DFLT,
+    .window         = BLE_SCAN_WINDOW_DFLT,
+    .timeout        = 0, // no timeout, in 10 ms units
+    .channel_mask   = { 0, 0, 0, 0, 0 }
+  });
 }
 
 void BLEScanner::useActiveScan(bool enable)
@@ -111,12 +114,23 @@ ble_gap_scan_params_t* BLEScanner::getParams(void)
 
 bool BLEScanner::start(uint16_t timeout)
 {
+  _report_data.p_data  = _scan_data;
+  _report_data.len     = BLE_GAP_SCAN_BUFFER_MAX;
+
   _param.timeout = timeout;
-  VERIFY_STATUS( sd_ble_gap_scan_start(&_param), false );
+
+  VERIFY_STATUS( sd_ble_gap_scan_start(&_param, &_report_data), false );
 
   Bluefruit._startConnLed(); // start blinking
   _runnning = true;
 
+  return true;
+}
+
+bool BLEScanner::resume(void)
+{
+  // resume scanning after received an report
+  VERIFY_STATUS( sd_ble_gap_scan_start(NULL, &_report_data), false );
   return true;
 }
 
@@ -138,7 +152,7 @@ bool BLEScanner::stop(void)
   * @param scandata
   * @param scanlen
   * @param type
-  * @param buf
+  * @param buf     Output buffer
   * @param bufsize If bufsize is skipped (zero), len check will be skipped
   * @return number of written bytes
   */
@@ -146,6 +160,8 @@ uint8_t BLEScanner::parseReportByType(const uint8_t* scandata, uint8_t scanlen, 
 {
   uint8_t len = 0;
   uint8_t const* ptr = NULL;
+
+  if ( scanlen < 2 ) return 0;
 
   // len (1+data), type, data
   while ( scanlen )
@@ -175,7 +191,7 @@ uint8_t BLEScanner::parseReportByType(const uint8_t* scandata, uint8_t scanlen, 
 
 uint8_t BLEScanner::parseReportByType(const ble_gap_evt_adv_report_t* report, uint8_t type, uint8_t* buf, uint8_t bufsize)
 {
-  return parseReportByType(report->data, report->dlen, type, buf, bufsize);
+  return parseReportByType(report->data.p_data, report->data.len, type, buf, bufsize);
 }
 
 bool BLEScanner::checkReportForUuid(const ble_gap_evt_adv_report_t* report, BLEUuid ble_uuid)
@@ -204,7 +220,7 @@ bool BLEScanner::checkReportForUuid(const ble_gap_evt_adv_report_t* report, BLEU
 
   for (int i=0; i<2; i++)
   {
-    uint8_t buffer[BLE_GAP_ADV_MAX_SIZE] = { 0 };
+    uint8_t buffer[BLE_GAP_ADV_SET_DATA_SIZE_MAX] = { 0 };
     uint8_t len = parseReportByType(report, type_arr[i], buffer);
 
     uint8_t* ptr = buffer;
@@ -227,12 +243,12 @@ bool BLEScanner::checkReportForUuid(const ble_gap_evt_adv_report_t* report, BLEU
   return false;
 }
 
-bool BLEScanner::checkReportForService(const ble_gap_evt_adv_report_t* report, BLEClientService svc)
+bool BLEScanner::checkReportForService(const ble_gap_evt_adv_report_t* report, BLEClientService& svc)
 {
   return checkReportForUuid(report, svc.uuid);
 }
 
-bool BLEScanner::checkReportForService(const ble_gap_evt_adv_report_t* report, BLEService svc)
+bool BLEScanner::checkReportForService(const ble_gap_evt_adv_report_t* report, BLEService& svc)
 {
   return checkReportForUuid(report, svc.uuid);
 }
@@ -277,6 +293,16 @@ void BLEScanner::filterUuid(BLEUuid ble_uuid[], uint8_t count)
   for(uint8_t i=0; i<count; i++) _filter_uuid[i] = ble_uuid[i];
 }
 
+void BLEScanner::filterService(BLEService& svc)
+{
+  filterUuid(svc.uuid);
+}
+
+void BLEScanner::filterService(BLEClientService& cli)
+{
+  filterUuid(cli.uuid);
+}
+
 void BLEScanner::filterMSD(uint16_t manuf_id)
 {
   _filter_msd_en = true;
@@ -304,38 +330,52 @@ void BLEScanner::clearFilters(void)
  */
 void BLEScanner::_eventHandler(ble_evt_t* evt)
 {
+  // conn handle has fixed offset for all events
+  uint16_t const conn_hdl = evt->evt.common_evt.conn_handle;
+
   switch ( evt->header.evt_id  )
   {
     case BLE_GAP_EVT_ADV_REPORT:
-    { // evt_conn_hdl is equal to BLE_CONN_HANDLE_INVALID
+    {
       ble_gap_evt_adv_report_t const* evt_report = &evt->evt.gap_evt.params.adv_report;
+      bool invoke_cb = false;
 
-      // filter by rssi
-      if ( _filter_rssi > evt_report->rssi ) break;
-
-      // filter by uuid
-      if ( _filter_uuid_count )
+      do
       {
-        uint8_t i;
-        for(i=0; i<_filter_uuid_count; i++)
+        // filter by rssi
+        if ( _filter_rssi > evt_report->rssi ) break;
+
+        // filter by uuid
+        if ( _filter_uuid_count )
         {
-          if ( checkReportForUuid(evt_report, _filter_uuid[i]) ) break;
+          uint8_t i;
+          for(i=0; i<_filter_uuid_count; i++)
+          {
+            if ( checkReportForUuid(evt_report, _filter_uuid[i]) ) break;
+          }
+
+          // If there is no matched UUID in the list --> filter failed
+          if ( i == _filter_uuid_count ) break;
         }
 
-        // If there is no matched UUID in the list --> filter failed
-        if ( i ==  _filter_uuid_count ) break;
-      }
+        // filter by MSD if present
+        if ( _filter_msd_en )
+        {
+          uint16_t id;
+          if ( !(parseReportByType(evt_report, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, (uint8_t*)&id, 2) && (id == _filter_msd_id)) ) break;
+        }
 
-      // filter by MSD if present
-      if ( _filter_msd_en )
+        invoke_cb = true;
+      } while(0); // for quick break
+
+      if ( invoke_cb )
       {
-        uint16_t id;
-        if ( !(parseReportByType(evt_report, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, (uint8_t*)&id, 2) && (id == _filter_msd_id)) ) break;
+        if (_rx_cb) ada_callback(evt_report, sizeof(*evt_report), _rx_cb, evt_report);
+      }else
+      {
+        // continue scanning since report is filtered and callback is not invoked
+        this->resume();
       }
-
-      ble_gap_evt_adv_report_t* adv_report = (ble_gap_evt_adv_report_t*) rtos_malloc( sizeof(ble_gap_evt_adv_report_t) );
-      (*adv_report) = (*evt_report);
-      if (_rx_cb) ada_callback(adv_report, _rx_cb, adv_report);
     }
     break;
 
@@ -345,37 +385,28 @@ void BLEScanner::_eventHandler(ble_evt_t* evt)
 
       if ( para->role == BLE_GAP_ROLE_CENTRAL)
       {
-        _runnning = false;
+        bitSet(_conn_mask, conn_hdl);
 
-        // Turn on Conn LED
-        Bluefruit._stopConnLed();
-        Bluefruit._setConnLed(true);
+        _runnning = false;
       }
     }
     break;
 
     case BLE_GAP_EVT_DISCONNECTED:
-      if ( BLE_GAP_ROLE_CENTRAL == Bluefruit.Gap.getRole(evt->evt.common_evt.conn_handle) )
+      if ( bitRead(_conn_mask, conn_hdl) && (0 == Bluefruit.Central.connected()) )
       {
-        // skip if already running
-        if ( !_runnning )
-        {
-          // Turn off Conn LED
-          Bluefruit._setConnLed(false);
+        bitClear(_conn_mask, conn_hdl);
 
-          // Auto start if enabled
-          if ( _start_if_disconnect )
-          {
-            start(_param.timeout);
-          }
-        }
+        // Auto start if enabled and not connected to any peripherals
+        if ( !_runnning && _start_if_disconnect ) start(_param.timeout);
       }
     break;
 
     case BLE_GAP_EVT_TIMEOUT:
       if (evt->evt.gap_evt.params.timeout.src == BLE_GAP_TIMEOUT_SRC_SCAN)
       {
-        if (_stop_cb) ada_callback(NULL, _stop_cb);
+        _runnning = false;
+        if (_stop_cb) ada_callback(NULL, 0, _stop_cb);
       }
     break;
 

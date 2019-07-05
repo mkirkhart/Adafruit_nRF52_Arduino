@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     syscall_newlib.c
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -76,17 +76,12 @@ caddr_t _sbrk( int incr )
 void __malloc_lock(struct _reent *ptr)
 {
   (void) ptr;
-  ledOn(LED_RED);
-
   vTaskSuspendAll();
 }
 
 void __malloc_unlock(struct _reent *ptr)
 {
   (void) ptr;
-
-  ledOn(LED_BLUE);
-
   xTaskResumeAll();
 }
 

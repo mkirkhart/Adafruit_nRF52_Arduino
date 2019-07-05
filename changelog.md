@@ -1,5 +1,158 @@
 # Adafruit nRF52 Arduino Core Changelog
 
+# 0.11.1
+
+- Refactor Ada Callback, use ISCR to detect isr context. Use function instead of macro
+- Implement #240 run travis test with all example sketches
+- Fix auto-start of advertising when central is connected, thanks to @ogatatsu PR #268
+- Added Tone()/noTone() functions
+
+# 0.11.0
+
+- Rework USB driver to support Adafruit_TinyUSB library (support HID and MSC)
+- Added Metro nRF52840 Express
+- Update bootloader binaries to 0.2.11
+- Rework Filesystem
+  - Seperate LittleFS and InternalFS into `Adafruit_LittleFS` and `InternalFileSystem`
+  - Remove ExternalFS in favor of using Adafruit_QSPI and Adafruit_SPIFlash library
+- Update nrfx to 1.6.2
+- Fixed #250 wrong values for g_ADigitalPinMap, thanks to @henrygab
+- Fixed interrupts for device with multiple I/O Port, thanks to MacGyverNL PR #261
+- Update adc_vbat.ino sketch to work with nrf52840, thanks to @pyro9
+- Extend SoftwareTimer with option to make it non-repeating, add reset function & ISR-safe functions, thanks to @MacGyverNL PR #260
+- Fixed connection handle in BLEHidAdafruit single connection api, thanks to @ogatatsu PR #267
+- Fixed spelling & Add Environmental Sensing GATT Service and UV Index GATT Characteristics UUID, thanks to @sayanee
+- Fixed #276 rename macro FILE_READ/WRITE to enum FILE_O_READ/WRITE
+- Upgrade compiler toolchain from gcc 5.2 2015q2 to gcc 7 2017q4
+- Rename hid client setProtocolMode() to setBootMode()
+- Removed `rtos_idle_callback()`, sketch define vApplicationIdleHook() if needed
+- enhance Serial.available()/write() to prevent blocking wait without yield/delay
+- Clean up compiler warnings
+
+# 0.10.1
+
+This release added multiple concurrent peripheral connections support, allow Bluefruit device to multiple central (phones/PC) simultaneously. It introduces new BLE class: BLEPeriph, BLEConnection, remove BLEGap, refactor/rename/move functions and callbacks.     
+
+- Fixed Servo detach issue
+- Fixed pulseIn() compile issue: implement countPulseASM() using C instead of ASM
+- Update bootloader to 0.2.9
+  - Fixed OTA issue with latest BLE5 central such as iPhone X
+  - Fixed incomplete writes on Windows. Updated tinyusb to handle write10 completion, and use it for finalizing the DFU process
+- Fixed various warnings, thanks @brijohn
+- Added ARDUINO_NRF52832_FEATHER for feather 832, ARDUINO_NRF52840_FEATHER for feather 840, ARDUINO_NRF52_FEATHER for both
+- Fixed an memory leak with LFS, also extend to allow it to be used with SPI flash on other boards. Thanks @jeremypoulter
+- Seperate OTA DFU service from Bluefruit.begin(), sketch must explicit add it if needed.
+- Added multiple peripheral-role connections support, example sketch is at `examples/Peripherals/bleuart_multi`
+- Introduce BLEPeriph class (Bluefruit.Periph) to mange peripheral role's connection
+  - setConnInterval(), setConnIntervalMS(), setConnSupervisionTimeout(), setConnSupervisionTimeoutMS()
+  - setConnectCallback(), setDisconnectCallback()
+- Bluefruit
+  - Bluefruit.getPeerAddr() is replaced by BLEConnection's getPeerAddr()
+  - Bluefruit.connInterval() is replaced by BLEConnection's getConnInterval()
+  - Bluefruit.Central.disconnect() is repalced by Bluefruit.disconnect()
+  - Bluefruit.begin() return type is changed from err_t to bool
+  - Bluefruit.setConnectCallback()/setDisconnectCallback() are replaced by BLEPeriph's setConnectCallback()/setDisconnectCallback()
+- Introduce BLEConnection class (Bluefruit.Connection(conn)) to mange both peripheral and central connections
+  - Added setRssiCallback(), monitorRssi(), getRssi(), stopRssi() for tracking rssi of a connection. `rssi_poll` and `rssi_callback` are added as example sketches 
+- Remove BLEGap, API functions are taken by Bluefruit, BLEPeriph, BLECentral, BLEConnection
+  - Gap.setAddr()/getAddr() are replaced by Bluefruit.setAddr()/getAddr()
+  - Gap.requestPairing() is replaced by Bluefruit.requestPairing(), conn_handle parameter is also added
+  - Most of other functions of BLEGap are replaced by BLEConnection's one
+- BLECharacteristic 
+  - Change callback signature's parameter from `BLECharacteristic&` to `BLECharacteristic*`
+  - conn_handle is added to all callbacks to support multiple peripheral's link
+  - Use AdaCallback thread for BLECharacteristic callbacks
+  - Support LONG WRITE a.k.a send more than MTU ( default = 20 bytes) per request. This fixed issue #91, #220
+  - Fixed read32(), thanks @techno
+  - Removed offset parameter in write callback signature
+- BLEUart
+  - Added conn_handle to API and callbacks
+  - Removed auto flush TXD() with timer, user must call flushTXD() should bufferTXD() is enabled. 
+- BLEHidAdafruit
+  - Removed keyboardReport() variant with flat keycode parameters
+  - Added conn_handle parameter to keyboard led callback
+
+# 0.9.3
+
+- Correct bootloader version text in IDE to 0.2.6
+- Fixed #173 bleuart return incorrect value when failed to send (PR #178 thanks Nenik)
+- Added Client Battery support BLEClientBas
+- Added BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST event support for Central
+- Added Jlink as programmer to upload sketch #133. Though at least one serial DFU upload is needed to disable firmware crc checking
+- Fixed issue with high speed uart baud ~ 1 Mbps (PR #158 thanks Ureloc)
+- Add HardwardPWM removePin(), refactor hwpwm.ino sketch
+- Fixed print float issue with precision > 10
+
+## 0.9.2
+
+- Fully support Feather nRF52840
+- Update bootloader with new led pattern
+- Fix #203: return software timer handle
+
+## 0.9.1
+
+- Rename FileIO.h to Bluefruit_FileIO to prevent conflict with other libraries.
+- Minor upgrade for bootloader to prevent issue with WDT enabled by application
+- 52840: call cdc flush before delay()
+
+## 0.9.0
+
+- Added nRF52840-based board support (pca10056 and feather nRF52840 express)
+- Upgrade bootloader to v6.1.1 ( single bank only )
+- Upgrade BSP code to match SD v6
+  - Bluefruit.Scanner.resume() must be called in scan callback to resume scanning after received an report.
+- Upgrade freeRTOS from v8 to v10.0.1
+- Upgrade Segger SysView to 2.52d
+- Added nrfx to core
+- Added tinyusb stack to libraries
+- Added LittleFS to replace NFFS
+- Added FileSystem Libraries base on SD File API
+  - InternalFS use LittleFS to manage internal flash for bonding and other user data
+  - ExternalFS use fatfs to manage external spi flash (nrf52840 only) for usb msc.
+- Replace cpritnf by std printf
+- Added HwPWM3 for nRF52840
+- Added ISR_DEFERRED option for attachInterrupt() to defer callback from ISR context
+  - Added digital_interrupt_deferred sketch for demo
+- Added support for using the Low Frequency RC oscillator ( PR #144 thanks to @jeremypoulter )
+  - USE_LFRC or USE_LFXO must be defined in board's variant.h
+- Fixed Scanner running state when timeout ( PR #186 thanks to @Ryscho )
+- Fixed #192 Client Characteristic write() return number of writtent instead of error code
+- Added #181 Bluefruit.setEventCallback() for user to handle ble event
+
+## 0.8.6
+
+- Fixed dbgDumpMemory for buffer > 255 byte, thanks to @airbornemint
+- Added setConnSupervisionTimeout and setConnSupervisionTimeoutMS ( PR #177 thanks to @airbornemint )
+- Decrease gpio's interrupt level to 2 to avoid conlfict with SD timing critical task ( PR #179 thanks to @Nenik )
+- Fixed #174 window build error with Arduino 1.8.6 with verbose = off
+
+## 0.8.5
+
+- Migrate nrfutil to adafruit-nrfutil, executable binaries for windows and macOS are included.
+- Implement #166 BLE HID Keyboard LED receive from Central, update hid_keyscan & hid_keyboard example.
+- Add hardware's systick sketch example
+- Add software timer's sketch example
+
+## 0.8.4
+
+- Fix #160: hardware PWM issue that cause Servo freq is 640 hz instead of 50hz
+- Fix #134: hardcoded pulse limits with Servo
+- Fix upload issue with windows when username has spaces
+- Support serialEvent()
+
+## 0.8.3
+
+- Enhanced indicate API() to wait for confirm or timeout from peer.
+- Added BLEScanner filterService() for BLEService and BLEClientService
+- Enhanced bonding management to support central bond and re-connection
+- Added BLEClientHidAdafruit implementation for client HID
+	- Added Central HID example
+- Enhanced BLEHidGeneric/BLEHidAdafruit to support boot protocol mode.
+- Fixed I2C lock-up when endTransmission() is called with empty txBuffer.
+- Fixed #125 : DFU temp memory typo
+- Fixed #126 : setWriteAuthorizeCallback typo
+- Fixed #90 : using VDD as analog reference
+
 ## 0.8.2
 
 - Fixed burning bootloader issue with MacOS

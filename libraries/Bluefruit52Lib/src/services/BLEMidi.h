@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     BLEMidi.h
-    @author   hathach & toddtreece
+    @author   hathach (tinyusb.org) & toddtreece
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com) All rights reserved.
+    Copyright (c) 2018, Adafruit Industries (adafruit.com) All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions are met:
@@ -52,13 +52,15 @@ extern const uint8_t BLEMIDI_UUID_CHR_IO[];
 class BLEMidi: public BLEService, public Stream
 {
   public:
-    typedef void (*midi_write_cb_t) (void);
+    typedef void (*midi_write_cb_t) (uint16_t conn_hdl);
 
     BLEMidi(uint16_t fifo_depth = BLE_MIDI_DEFAULT_FIFO_DEPTH);
 
     virtual err_t begin(void);
     void begin(int baudrate); // MidiInterface
-    bool  notifyEnabled(void);
+
+    bool notifyEnabled(void);
+    bool notifyEnabled(uint16_t conn_hdl);
 
     bool send(uint8_t data[], uint8_t len);
     bool sendSplit(uint8_t data[], uint8_t len);
@@ -73,11 +75,11 @@ class BLEMidi: public BLEService, public Stream
     void autoMIDIread(void* midi_obj);
 
     // Stream API for MIDI Interface
-    virtual int       read       ( void );
-    virtual size_t    write      ( uint8_t b );
-    virtual int       available  ( void );
-    virtual int       peek       ( void );
-    virtual void      flush      ( void );
+    virtual int    read       ( void );
+    virtual size_t write      ( uint8_t b );
+    virtual int    available  ( void );
+    virtual int    peek       ( void );
+    virtual void   flush      ( void );
 
     using Print::write; // pull in write(str) and write(buf, size) from Print
 
@@ -89,9 +91,9 @@ class BLEMidi: public BLEService, public Stream
 
     void* _midilib_obj;
 
-    void _write_handler(uint8_t* data, uint16_t len);
+    void _write_handler(uint16_t conn_hdl, uint8_t* data, uint16_t len);
 
-    friend void blemidi_write_cb(BLECharacteristic& chr, uint8_t* data, uint16_t len, uint16_t offset);
+    static void blemidi_write_cb(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t* data, uint16_t len);
 };
 
 

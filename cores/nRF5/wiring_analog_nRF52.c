@@ -17,7 +17,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifdef NRF52
+#if defined(NRF52) || defined(NRF52_SERIES)
 
 #include "nrf.h"
 
@@ -169,7 +169,7 @@ uint32_t analogRead( uint32_t ulPin )
   uint32_t pin = SAADC_CH_PSELP_PSELP_NC;
   uint32_t saadcResolution;
   uint32_t resolution;
-  int16_t value;
+  volatile int16_t value = 0;
 
   if (ulPin >= PINS_COUNT) {
     return 0;
@@ -241,7 +241,7 @@ uint32_t analogRead( uint32_t ulPin )
                             | ((saadcReference                << SAADC_CH_CONFIG_REFSEL_Pos) & SAADC_CH_CONFIG_REFSEL_Msk)
                             | ((SAADC_CH_CONFIG_TACQ_3us      << SAADC_CH_CONFIG_TACQ_Pos)   & SAADC_CH_CONFIG_TACQ_Msk)
                             | ((SAADC_CH_CONFIG_MODE_SE       << SAADC_CH_CONFIG_MODE_Pos)   & SAADC_CH_CONFIG_MODE_Msk)
-							| ((saadcBurst					  << SAADC_CH_CONFIG_BURST_Pos)   & SAADC_CH_CONFIG_BURST_Msk);
+                            | ((saadcBurst                    << SAADC_CH_CONFIG_BURST_Pos)   & SAADC_CH_CONFIG_BURST_Msk);
   NRF_SAADC->CH[0].PSELN = pin;
   NRF_SAADC->CH[0].PSELP = pin;
 

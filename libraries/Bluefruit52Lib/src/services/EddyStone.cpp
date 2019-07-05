@@ -1,13 +1,13 @@
 /**************************************************************************/
 /*!
     @file     EddyStone.cpp
-    @author   hathach
+    @author   hathach (tinyusb.org)
 
     @section LICENSE
 
     Software License Agreement (BSD License)
 
-    Copyright (c) 2017, Adafruit Industries (adafruit.com)
+    Copyright (c) 2018, Adafruit Industries (adafruit.com)
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -81,7 +81,7 @@ EddyStoneUrl::EddyStoneUrl(int8_t rssiAt0m, const char* url)
   _url  = url;
 }
 
-bool EddyStoneUrl::setUrl(const char* url)
+void EddyStoneUrl::setUrl(const char* url)
 {
   _url = url;
 }
