@@ -109,7 +109,9 @@ bool Adafruit_LittleFS::mkdir (char const *filepath)
 
   while ( NULL != (slash = strchr(slash, '/')) )
   {
-    char parent[slash - filepath + 1] = { 0 };
+    char parent[slash - filepath + 1];
+
+    memset(parent, 0, sizeof(parent));
     memcpy(parent, filepath, slash - filepath);
 
     // make intermediate parent
